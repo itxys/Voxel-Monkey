@@ -17,6 +17,9 @@ declare global {
   }
 }
 
+// Click distance threshold in pixels
+const CLICK_THRESHOLD = 5;
+
 interface VoxelBoxProps {
   voxel: Voxel;
   index: number;
@@ -49,6 +52,7 @@ const VoxelBox: React.FC<VoxelBoxProps> = ({
 }) => {
   const [hovered, setHovered] = useState(false);
   const meshRef = useRef<THREE.Mesh>(null);
+  const downPos = useRef({ x: 0, y: 0 });
 
   const getEmissive = () => {
     if (!isPreview && hovered) {
@@ -84,7 +88,15 @@ const VoxelBox: React.FC<VoxelBoxProps> = ({
       ref={meshRef}
       position={voxel.position} 
       scale={finalScale}
-      onClick={onClick ? (e) => onClick(e, index) : undefined}
+      onPointerDown={(e) => {
+        downPos.current = { x: e.screenX, y: e.screenY };
+      }}
+      onClick={(e) => {
+        const dist = Math.hypot(e.screenX - downPos.current.x, e.screenY - downPos.current.y);
+        if (dist < CLICK_THRESHOLD && onClick) {
+          onClick(e, index);
+        }
+      }}
       onPointerOver={(e) => { 
         e.stopPropagation(); 
         setHovered(true);
@@ -215,7 +227,16 @@ const InteractiveGrid: React.FC<{
   gridSize: number;
   gridDensity: number;
 }> = ({ onAdd, onHover, gridSize, gridDensity }) => {
+  const downPos = useRef({ x: 0, y: 0 });
+
+  const handlePointerDown = (e: ThreeEvent<PointerEvent>) => {
+    downPos.current = { x: e.screenX, y: e.screenY };
+  };
+
   const handleGridClick = (e: ThreeEvent<MouseEvent>) => {
+    const dist = Math.hypot(e.screenX - downPos.current.x, e.screenY - downPos.current.y);
+    if (dist >= CLICK_THRESHOLD) return;
+
     e.stopPropagation();
     const point = e.point;
     const pos: Vector3 = [
@@ -255,6 +276,7 @@ const InteractiveGrid: React.FC<{
       <mesh 
         rotation={[-Math.PI / 2, 0, 0]} 
         position={[0, -0.5, 0]} 
+        onPointerDown={handlePointerDown}
         onClick={handleGridClick}
         onPointerMove={handlePointerMove}
         onPointerOut={() => onHover(null, null)}
@@ -282,6 +304,7 @@ const VoxelModel: React.FC<VoxelModelProps> = ({
   const [placementPos, setPlacementPos] = useState<Vector3 | null>(null);
 
   const handleVoxelClick = useCallback((e: ThreeEvent<MouseEvent>, index: number) => {
+    // Note: The logic inside handleVoxelClick is already guarded by the CLICK_THRESHOLD in VoxelBox
     e.stopPropagation();
     
     switch (currentTool) {
